@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wimbledon 2024 Chatbot</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #e8f5e9;
+        }
+        h1 {
+            color: #1a5221;
+            text-align: center;
+        }
+        #chatbox {
+            height: 400px;
+            border: 1px solid #4caf50;
+            padding: 10px;
+            overflow-y: scroll;
+            margin-bottom: 10px;
+            background-color: white;
+            border-radius: 5px;
+        }
+        #userInput {
+            width: 70%;
+            padding: 10px;
+            margin-right: 10px;
+            border: 1px solid #4caf50;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>Wimbledon 2024 Chatbot</h1>
+    <div id="chatbox"></div>
+    <input type="text" id="userInput" placeholder="Type your message here...">
+    <button onclick="sendMessage()">Send</button>
+
+    <script>
+        function sendMessage() {
+            const userInput = document.getElementById('userInput');
+            const chatbox = document.getElementById('chatbox');
+            const query = userInput.value;
+            
+            if (query.trim() === '') return;  // Prevent empty messages
+            
+            // Display user message
+            chatbox.innerHTML += `<p><strong>You:</strong> ${query}</p>`;
+            
+            // Clear input field
+            userInput.value = '';
+
+            // Send query to server
+            axios.post('/query', { query: query })
+                .then(function (response) {
+                    // Display bot response
+                    chatbox.innerHTML += `<p><strong>Bot:</strong> ${response.data.answer}</p>`;
+                    chatbox.scrollTop = chatbox.scrollHeight;
+                })
+                .catch(function (error) {
+                    console.error('Error:', error);
+                    chatbox.innerHTML += `<p><strong>Error:</strong> Unable to get response</p>`;
+                });
+        }
+
+        // Allow sending message with Enter key
+        document.getElementById('userInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Initial greeting
+        window.onload = function() {
+            const chatbox = document.getElementById('chatbox');
+            chatbox.innerHTML += `<p><strong>Bot:</strong> Welcome to the Wimbledon 2024 Chatbot! How can I assist you today? Feel free to ask any questions about the Wimbledon Championships or the content of the Ticket Holders Handbook.</p>`;
+        };
+    </script>
+</body>
+</html>
