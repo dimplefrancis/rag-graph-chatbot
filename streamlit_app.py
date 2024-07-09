@@ -23,7 +23,7 @@ st.set_page_config(
 
 # Function to get local image path
 def get_image_path(image_name):
-    return os.path.join("images", image_name)
+    return os.path.join("Images", image_name)
 
 # Custom CSS
 st.markdown("""
