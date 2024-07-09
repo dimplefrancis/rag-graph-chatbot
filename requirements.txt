@@ -1,8 +1,9 @@
 streamlit
-python-dotenv
+azure-identity
+azure-keyvault-secrets
 langchain
-langchain-community
 langchain-openai
+langchain-community
 openai
 PyMuPDF
 pillow
