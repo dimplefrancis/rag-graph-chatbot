@@ -1,9 +1,7 @@
 streamlit
 python-dotenv
-langchain-community-graphs
-langchain-openai
-langchain-community-vectorstores
-langchain-community-document-loaders
+langchain
+openai
 PyMuPDF
 pillow
 neo4j
