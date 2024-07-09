@@ -6,45 +6,60 @@ from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores.neo4j_vector import Neo4jVector
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from PIL import Image
 
 # Load environment variables
 load_dotenv()
 
-# Explicitly set environment variables
-os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API")  # Note the change here
-os.environ["NEO4J_URI"] = os.getenv("NEO4J_URI")
-os.environ["NEO4J_USERNAME"] = os.getenv("NEO4J_USERNAME")
-os.environ["NEO4J_PASSWORD"] = os.getenv("NEO4J_PASSWORD")
-
-# Check if all required keys are loaded
-required_keys = ["OPENAI_API", "NEO4J_URI", "NEO4J_USERNAME", "NEO4J_PASSWORD"]
-missing_keys = [key for key in required_keys if not os.getenv(key)]
-
-if missing_keys:
-    st.error(f"The following environment variables are missing: {', '.join(missing_keys)}. Please check your .env file.")
-    st.stop()
-
-# Set page title
-st.set_page_config(page_title="Wimbledon 2024 Chatbot")
-
-# Title
-st.title("Wimbledon 2024 Chatbot")
-
-# Debug logging
-st.sidebar.write("Environment variables loaded:")
-st.sidebar.write(f"OPENAI_API: {os.getenv('OPENAI_API')[:5]}...{os.getenv('OPENAI_API')[-5:]}")
-st.sidebar.write(f"NEO4J_URI: {os.getenv('NEO4J_URI')}")
-st.sidebar.write(f"NEO4J_USERNAME: {os.getenv('NEO4J_USERNAME')}")
-st.sidebar.write(f"NEO4J_PASSWORD: {'*' * len(os.getenv('NEO4J_PASSWORD', ''))}")
-
-# Model selection
-model_name = st.sidebar.selectbox(
-    "Choose a model",
-    ("gpt-3.5-turbo", "gpt-4-turbo-preview")
+# Set page config
+st.set_page_config(
+    page_title="Wimbledon 2024 Chatbot",
+    page_icon="🎾",
+    layout="wide"
 )
 
-# Display selected model
-st.sidebar.write(f"Currently using: {model_name}")
+# Function to get local image path
+def get_image_path(image_name):
+    return os.path.join("images", image_name)
+
+# Custom CSS
+st.markdown("""
+    <style>
+    .main {
+        background-color: #f0f0f0;
+    }
+    .big-font {
+        font-size: 50px !important;
+        font-weight: bold;
+        color: #4B0082;
+        text-align: center;
+    }
+    .custom-button, .stButton > button {
+        display: inline-block;
+        padding: 10px 24px;
+        font-size: 20px;
+        cursor: pointer;
+        text-align: center;
+        text-decoration: none;
+        outline: none;
+        color: #fff !important;
+        background-color: #4B0082 !important;
+        border: none !important;
+        border-radius: 5px !important;
+        width: 100%;
+    }
+    .custom-button:hover, .stButton > button:hover {
+        background-color: #3a006c !important;
+    }
+    .custom-button:active, .stButton > button:active {
+        background-color: #2d0052 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Initialize session state for navigation
+if 'page' not in st.session_state:
+    st.session_state.page = 'landing'
 
 # Initialize Neo4j Graph and vector store
 @st.cache_resource
@@ -61,65 +76,152 @@ def initialize_resources(model):
         username=os.getenv("NEO4J_USERNAME"),
         password=os.getenv("NEO4J_PASSWORD")
     )
-    llm = ChatOpenAI(temperature=0, model_name=model, openai_api_key=os.getenv("OPENAI_API"))
+    llm = ChatOpenAI(temperature=0.8, model_name=model, openai_api_key=os.getenv("OPENAI_API"))
     return graph, neo4j_vector, llm
 
-graph, neo4j_vector, llm = initialize_resources(model_name)
-
 # Function to ingest PDF
-def ingest_pdf(file):
-    with st.spinner("Processing PDF..."):
-        # Save uploaded file temporarily
-        with open("temp.pdf", "wb") as f:
-            f.write(file.getbuffer())
-        
-        # Load and process the PDF
-        loader = PyMuPDFLoader("temp.pdf")
-        documents = loader.load()
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=20)
-        split_documents = text_splitter.split_documents(documents)
-        
-        # Add to vector store
-        neo4j_vector.add_documents(split_documents)
-        
-        # Remove temporary file
-        os.remove("temp.pdf")
-        
-        st.success(f"Ingested {len(split_documents)} document chunks")
+@st.cache_resource
+def load_and_split_pdf(file_path):
+    loader = PyMuPDFLoader(file_path)
+    documents = loader.load()
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=20)
+    split_documents = text_splitter.split_documents(documents)
+    return split_documents
 
-# PDF Ingestion Section
-st.header("Update Knowledge Base")
-pdf_file = st.file_uploader("Upload PDF file", type="pdf")
-if pdf_file:
-    ingest_pdf(pdf_file)
+def ingest_pdf(neo4j_vector, split_documents):
+    neo4j_vector.add_documents(split_documents)
+    return len(split_documents)
 
-# Chat Interface
-st.header("Chat with Wimbledon Bot")
+# Function to check if input is a greeting
+def is_greeting(text):
+    greetings = ['hi', 'hello', 'hey', 'greetings', 'good morning', 'good afternoon', 'good evening']
+    return any(greeting in text.lower() for greeting in greetings)
 
-# Initialize chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# Display chat messages from history on app rerun
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-# React to user input
-if prompt := st.chat_input("What would you like to know about Wimbledon?"):
-    # Display user message in chat message container
-    st.chat_message("user").markdown(prompt)
-    # Add user message to chat history
-    st.session_state.messages.append({"role": "user", "content": prompt})
-
-    # Get response from chatbot
+# Function to generate response
+def generate_response(prompt, neo4j_vector, llm):
+    if is_greeting(prompt):
+        return "Hello! Welcome to the Wimbledon 2024 chatbot. How can I assist you with information about the tournament based on the Ticket Holders Handbook?"
+    
     docs = neo4j_vector.similarity_search(prompt, k=3)
     context = "\n".join([doc.page_content for doc in docs])
-    response_prompt = f"Based on the following context, answer the question about Wimbledon. If the answer is not in the context, say 'I don't have enough information to answer that question.'\n\nContext: {context}\n\nQuestion: {prompt}\n\nAnswer:"
-    response = llm.invoke(response_prompt)
+    response_prompt = f"""Based solely on the following context from the Wimbledon 2024 Ticket Holders Handbook, answer the question. If the answer is not in the context, politely say that you don't have that specific information in the handbook and ask if there's anything else you can help with regarding Wimbledon 2024.
 
-    # Display assistant response in chat message container
-    with st.chat_message("assistant"):
-        st.markdown(response.content)
-    # Add assistant response to chat history
-    st.session_state.messages.append({"role": "assistant", "content": response.content})
+    Context: {context}
+
+    Question: {prompt}
+
+    Answer:"""
+    response = llm.invoke(response_prompt)
+    return "Based on the information in the Wimbledon 2024 Ticket Holders Handbook: " + response.content
+
+# Landing Page
+def show_landing_page():
+    st.markdown(
+        f"""
+        <style>
+        .stApp {{
+            background-image: url("{get_image_path('background.jpg')}");
+            background-size: cover;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    st.markdown("<h1 class='big-font'>Wimbledon 2024</h1>", unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("WimbleChat", key="wimblechat-button"):
+            st.session_state.page = 'chat'
+            st.experimental_rerun()
+    with col2:
+        st.markdown(
+            """
+            <a href="https://www.wimbledon.com" target="_blank" style="text-decoration:none;">
+                <button class="custom-button">
+                    Official Wimbledon Site
+                </button>
+            </a>
+            """, 
+            unsafe_allow_html=True
+        )
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.image(get_image_path("aerial_view.jpg"), use_column_width=True)
+    with col2:
+        st.image(get_image_path("trophy.jpg"), use_column_width=True)
+    with col3:
+        st.image(get_image_path("centre_court.jpg"), use_column_width=True)
+
+# Chatbot Page
+def show_chat_page():
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background-image: none;
+            background-color: #f0f0f0;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    col1, col2, col3 = st.columns([1, 3, 1])
+    with col1:
+        st.image(get_image_path("wimbledon_logo.jpg"), width=150)
+    with col2:
+        st.title("WIMBLECHAT")
+    with col3:
+        if st.button("Home", key="home-button"):
+            st.session_state.page = 'landing'
+            st.experimental_rerun()
+
+    model_name = st.sidebar.selectbox(
+        "Choose a model",
+        ("gpt-3.5-turbo", "gpt-4-turbo-preview")
+    )
+    st.sidebar.write(f"Currently using: {model_name}")
+
+    st.sidebar.info(
+        "This chatbot provides information based solely on the Wimbledon 2024 Ticket Holders Handbook. "
+        "For the most up-to-date and comprehensive information, please visit the official Wimbledon website."
+    )
+
+    graph, neo4j_vector, llm = initialize_resources(model_name)
+
+    pdf_path = "data/Ticket Holders Handbook 2024.pdf"
+    if os.path.exists(pdf_path):
+        split_documents = load_and_split_pdf(pdf_path)
+        num_chunks = ingest_pdf(neo4j_vector, split_documents)
+        st.sidebar.write(f"PDF ingested: {num_chunks} chunks")
+    else:
+        st.sidebar.error("PDF file not found. Please check the file path.")
+
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    if prompt := st.chat_input("What would you like to know about Wimbledon 2024?"):
+        st.chat_message("user").markdown(prompt)
+        st.session_state.messages.append({"role": "user", "content": prompt})
+
+        response = generate_response(prompt, neo4j_vector, llm)
+
+        st.chat_message("assistant").markdown(response)
+        st.session_state.messages.append({"role": "assistant", "content": response})
+
+# Main app logic
+def main():
+    if st.session_state.page == 'landing':
+        show_landing_page()
+    elif st.session_state.page == 'chat':
+        show_chat_page()
+
+if __name__ == "__main__":
+    main()
