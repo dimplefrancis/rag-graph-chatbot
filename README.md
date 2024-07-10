@@ -14,6 +14,7 @@ The **Wimblechat**(Wimbledon 2024 Chatbot) is an AI-powered application that pro
 
 ## User Guide
 <img src="Images/Wimblechat1.jpg"  width="100%" alt="Dimple Francis">
+
 1. Access the application via web browser at: [Wimbledon Chatbot](http://wimbledonchatbot.uksouth.azurecontainer.io:8501)
 2. Click on **'WimbleChat'** to get into the chat interface. It might take a **minute** to load the first time; **try reloading** or **clicking on Home**(The time to load the chat is a limitation).
 3. Type questions or prompts in the chat interface.
