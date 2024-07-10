@@ -51,6 +51,8 @@ The **Wimblechat**(Wimbledon 2024 Chatbot) is an AI-powered application that pro
 
 ## Advantages of RAG with Graphs
 
+<img src="Images/graph.jpg"  width="100%" alt="Dimple Francis">
+
 - **Enhanced Contextual Understanding:** Graph databases like Neo4j excel at capturing and querying complex relationships, providing a richer context for the generative model.
 - **Scalability:** Neo4j can handle large volumes of interconnected data, making it suitable for applications requiring extensive knowledge bases.
 - **Improved Accuracy:** The use of OpenAI embeddings ensures that the most semantically relevant information is retrieved, leading to more accurate and relevant responses.
