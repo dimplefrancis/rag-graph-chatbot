@@ -8,7 +8,7 @@ The **Wimblechat**(Wimbledon 2024 Chatbot) is an AI-powered application that pro
 
 ## Publication on Medium
 
-[MediumEnhancing AI Chatbots with Graph-based RAG: A Case Study of WimbleChat](https://medium.com/@dimplefrancis/enhancing-ai-chatbots-with-graph-based-rag-a-case-study-of-wimblechat-dd922d46a0cb)
+[Enhancing AI Chatbots with Graph-based RAG: A Case Study of WimbleChat](https://medium.com/@dimplefrancis/enhancing-ai-chatbots-with-graph-based-rag-a-case-study-of-wimblechat-dd922d46a0cb)
 
 ## Functionality
 
