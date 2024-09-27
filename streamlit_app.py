@@ -137,7 +137,7 @@ def show_landing_page():
     with col1:
         if st.button("WimbleChat", key="wimblechat-button"):
             st.session_state.page = 'chat'
-            st.experimental_rerun()
+            st.rerun()
     with col2:
         st.markdown(
             """
@@ -180,7 +180,7 @@ def show_chat_page():
     with col3:
         if st.button("Home", key="home-button"):
             st.session_state.page = 'landing'
-            st.experimental_rerun()
+            st.rerun()
 
     model_name = st.sidebar.selectbox(
         "Choose a model",
