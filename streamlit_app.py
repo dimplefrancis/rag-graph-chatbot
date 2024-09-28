@@ -77,7 +77,8 @@ def initialize_resources(model):
         embedding=embeddings,
         url=os.getenv("NEO4J_URI"),
         username=os.getenv("NEO4J_USERNAME"),
-        password=os.getenv("NEO4J_PASSWORD")
+        password=os.getenv("NEO4J_PASSWORD"),
+        index_name="document_embedding"
     )
     llm = ChatOpenAI(temperature=0.8, model_name=model, openai_api_key=os.getenv("OPENAI_API"))
     return graph, neo4j_vector, llm
