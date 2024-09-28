@@ -78,7 +78,6 @@ def initialize_resources(model):
         url=os.getenv("NEO4J_URI"),
         username=os.getenv("NEO4J_USERNAME"),
         password=os.getenv("NEO4J_PASSWORD"),
-        index_name="document_embedding"
     )
     llm = ChatOpenAI(temperature=0.8, model_name=model, openai_api_key=os.getenv("OPENAI_API"))
     return graph, neo4j_vector, llm
@@ -125,13 +124,11 @@ def generate_response(prompt, neo4j_vector, llm):
         return "Based on the information in the Wimbledon 2024 Ticket Holders Handbook: " + response.content
 
     except Exception as e:
-        error_message = f"An error occurred: {str(e)}"
-        st.error(error_message)
+        st.error(f"An error occurred: {str(e)}")
         st.error("Details of the error have been logged for the developers to investigate.")
-        # In a production environment, you'd want to log this error properly
-        print(f"Error in generate_response: {error_message}")
+        print(f"Error in generate_response: {str(e)}")
         return "I'm sorry, but I encountered an error while processing your request. Please try asking your question again, or ask about something else related to Wimbledon 2024."
-
+    
 # Landing Page
 def show_landing_page():
     st.markdown(
