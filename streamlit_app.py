@@ -105,17 +105,31 @@ def generate_response(prompt, neo4j_vector, llm):
     if is_greeting(prompt):
         return "Hello! Welcome to the Wimbledon 2024 chatbot. How can I assist you with information about the tournament based on the Ticket Holders Handbook?"
     
-    docs = neo4j_vector.similarity_search(prompt, k=3)
-    context = "\n".join([doc.page_content for doc in docs])
-    response_prompt = f"""Based solely on the following context from the Wimbledon 2024 Ticket Holders Handbook, answer the question. If the answer is not in the context, politely say that you don't have that specific information in the handbook and ask if there's anything else you can help with regarding Wimbledon 2024.
+    try:
+        docs = neo4j_vector.similarity_search(prompt, k=3)
+        if not docs:
+            st.warning("No relevant documents found in the database.")
+            return "I couldn't find any specific information about that in the Ticket Holders Handbook. Is there something else about Wimbledon 2024 you'd like to know?"
 
-    Context: {context}
+        context = "\n".join([doc.page_content for doc in docs])
+        response_prompt = f"""Based solely on the following context from the Wimbledon 2024 Ticket Holders Handbook, answer the question. If the answer is not in the context, politely say that you don't have that specific information in the handbook and ask if there's anything else you can help with regarding Wimbledon 2024.
 
-    Question: {prompt}
+        Context: {context}
 
-    Answer:"""
-    response = llm.invoke(response_prompt)
-    return "Based on the information in the Wimbledon 2024 Ticket Holders Handbook: " + response.content
+        Question: {prompt}
+
+        Answer:"""
+        
+        response = llm.invoke(response_prompt)
+        return "Based on the information in the Wimbledon 2024 Ticket Holders Handbook: " + response.content
+
+    except Exception as e:
+        error_message = f"An error occurred: {str(e)}"
+        st.error(error_message)
+        st.error("Details of the error have been logged for the developers to investigate.")
+        # In a production environment, you'd want to log this error properly
+        print(f"Error in generate_response: {error_message}")
+        return "I'm sorry, but I encountered an error while processing your request. Please try asking your question again, or ask about something else related to Wimbledon 2024."
 
 # Landing Page
 def show_landing_page():
