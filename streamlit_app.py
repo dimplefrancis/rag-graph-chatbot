@@ -72,14 +72,26 @@ def initialize_resources(model):
         username=os.getenv("NEO4J_USERNAME"),
         password=os.getenv("NEO4J_PASSWORD")
     )
-    embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API"))
+
+    embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
+    
+    # Update these based on the output from check_database_content()
+    node_label = "Chunk"  # Replace with the actual label you see in the output
+    text_property = "text"  # Replace with the actual property name for the text content
+    embedding_property = "embedding"  # Replace with the actual property name for the embedding
+
     neo4j_vector = Neo4jVector(
         embedding=embeddings,
         url=os.getenv("NEO4J_URI"),
         username=os.getenv("NEO4J_USERNAME"),
         password=os.getenv("NEO4J_PASSWORD"),
+        node_label=node_label,
+        text_node_property=text_property,
+        embedding_node_property=embedding_property
     )
-    llm = ChatOpenAI(temperature=0.8, model_name=model, openai_api_key=os.getenv("OPENAI_API"))
+
+    llm = ChatOpenAI(temperature=0, model_name=model, openai_api_key=os.getenv("OPENAI_API_KEY"))
+    
     return graph, neo4j_vector, llm
 
 # Function to ingest PDF
@@ -101,6 +113,25 @@ def is_greeting(text):
     return any(greeting in text.lower() for greeting in greetings)
 
 # Function to generate response
+def check_database_content(graph):
+    # Check for nodes and their labels
+    result = graph.query("MATCH (n) RETURN DISTINCT labels(n) as labels, count(*) as count")
+    st.write("Node types in the database:")
+    for row in result:
+        st.write(f"Label: {row['labels']}, Count: {row['count']}")
+
+    # Check for properties on nodes
+    result = graph.query("MATCH (n) UNWIND keys(n) AS key RETURN DISTINCT key, count(*) as count")
+    st.write("Properties on nodes:")
+    for row in result:
+        st.write(f"Property: {row['key']}, Count: {row['count']}")
+
+    # Check for nodes with 'embedding' property (assuming this is the vector)
+    result = graph.query("MATCH (n) WHERE exists(n.embedding) RETURN labels(n) as labels, count(*) as count")
+    st.write("Nodes with 'embedding' property:")
+    for row in result:
+        st.write(f"Label: {row['labels']}, Count: {row['count']}")
+
 def generate_response(prompt, neo4j_vector, llm):
     if is_greeting(prompt):
         return "Hello! Welcome to the Wimbledon 2024 chatbot. How can I assist you with information about the tournament based on the Ticket Holders Handbook?"
@@ -206,7 +237,7 @@ def show_chat_page():
     )
 
     graph, neo4j_vector, llm = initialize_resources(model_name)
-
+    check_database_content(graph)
     pdf_path = "data/Ticket Holders Handbook 2024.pdf"
     if os.path.exists(pdf_path):
         split_documents = load_and_split_pdf(pdf_path)
