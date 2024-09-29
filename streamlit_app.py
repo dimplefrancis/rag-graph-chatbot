@@ -1,8 +1,8 @@
 import streamlit as st
 import os
-from langchain_community.graphs import Neo4jGraph
+from langchain.graphs import Neo4jGraph
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain_community.vectorstores.neo4j_vector import Neo4jVector
+from langchain_community.vectorstores import Neo4jVector
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from PIL import Image
@@ -70,44 +70,70 @@ def initialize_resources(model):
         embedding=embeddings,
         url=os.getenv("NEO4J_URI"),
         username=os.getenv("NEO4J_USERNAME"),
-        password=os.getenv("NEO4J_PASSWORD")
+        password=os.getenv("NEO4J_PASSWORD"),
+        index_name="chunk_embedding_index"
     )
-    llm = ChatOpenAI(temperature=0.8, model_name=model, openai_api_key=os.getenv("OPENAI_API_KEY"))
+    llm = ChatOpenAI(temperature=0, model_name=model, openai_api_key=os.getenv("OPENAI_API_KEY"))
     return graph, neo4j_vector, llm
 
-@st.cache_resource
-def load_and_split_pdf(file_path):
-    loader = PyMuPDFLoader(file_path)
-    documents = loader.load()
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=20)
-    split_documents = text_splitter.split_documents(documents)
-    return split_documents
+# Function to check database content
+def check_database_content(graph):
+    try:
+        result = graph.query("MATCH (n) RETURN DISTINCT labels(n) as labels, count(*) as count")
+        st.write("Node types in the database:")
+        for row in result:
+            st.write(f"Label: {row['labels']}, Count: {row['count']}")
 
-def ingest_pdf(neo4j_vector, split_documents):
-    neo4j_vector.add_documents(split_documents)
-    return len(split_documents)
+        result = graph.query("MATCH (n) UNWIND keys(n) AS key RETURN DISTINCT key, count(*) as count")
+        st.write("Properties on nodes:")
+        for row in result:
+            st.write(f"Property: {row['key']}, Count: {row['count']}")
 
-# Function to check if input is a greeting
-def is_greeting(text):
-    greetings = ['hi', 'hello', 'hey', 'greetings', 'good morning', 'good afternoon', 'good evening']
-    return any(greeting in text.lower() for greeting in greetings)
+        result = graph.query("MATCH (n) WHERE n.embedding IS NOT NULL RETURN labels(n) as labels, count(*) as count")
+        st.write("Nodes with 'embedding' property:")
+        for row in result:
+            st.write(f"Label: {row['labels']}, Count: {row['count']}")
+    except Exception as e:
+        st.error(f"Error checking database content: {str(e)}")
+
+# Function to create vector index
+def create_vector_index(graph):
+    try:
+        graph.query("""
+        CREATE VECTOR INDEX chunk_embedding_index IF NOT EXISTS
+        FOR (c:Chunk) ON (c.embedding)
+        OPTIONS {indexProvider: 'vector-1.0', indexConfig: {`vector.dimensions`: 1536, `vector.similarity_function`: 'cosine'}}
+        """)
+        st.write("Vector index created successfully.")
+    except Exception as e:
+        st.error(f"Error creating vector index: {str(e)}")
 
 # Function to generate response
 def generate_response(prompt, neo4j_vector, llm):
-    if is_greeting(prompt):
-        return "Hello! Welcome to the Wimbledon 2024 chatbot. How can I assist you with information about the tournament based on the Ticket Holders Handbook?"
-    
-    docs = neo4j_vector.similarity_search(prompt, k=3)
-    context = "\n".join([doc.page_content for doc in docs])
-    response_prompt = f"""Based solely on the following context from the Wimbledon 2024 Ticket Holders Handbook, answer the question. If the answer is not in the context, politely say that you don't have that specific information in the handbook and ask if there's anything else you can help with regarding Wimbledon 2024.
+    try:
+        st.write("Starting similarity search...")
+        docs = neo4j_vector.similarity_search(prompt, k=3)
+        st.write(f"Similarity search completed. Found {len(docs)} documents.")
+        
+        if not docs:
+            return "I couldn't find any specific information about that in the Ticket Holders Handbook. Is there something else about Wimbledon 2024 you'd like to know?"
 
-    Context: {context}
+        context = "\n".join([doc.page_content for doc in docs])
+        st.write("Generating response based on retrieved documents...")
+        response_prompt = f"""Based solely on the following context from the Wimbledon 2024 Ticket Holders Handbook, answer the question. If the answer is not in the context, politely say that you don't have that specific information in the handbook and ask if there's anything else you can help with regarding Wimbledon 2024.
 
-    Question: {prompt}
+        Context: {context}
 
-    Answer:"""
-    response = llm.invoke(response_prompt)
-    return "Based on the information in the Wimbledon 2024 Ticket Holders Handbook: " + response.content
+        Question: {prompt}
+
+        Answer:"""
+        
+        response = llm.invoke(response_prompt)
+        return "Based on the information in the Wimbledon 2024 Ticket Holders Handbook: " + response.content
+
+    except Exception as e:
+        st.error(f"An error occurred during response generation: {str(e)}")
+        return "I'm sorry, but I encountered an error while processing your request. Could you please rephrase your question or ask about something else related to Wimbledon 2024?"
 
 # Landing Page
 def show_landing_page():
@@ -184,31 +210,33 @@ def show_chat_page():
         "For the most up-to-date and comprehensive information, please visit the official Wimbledon website."
     )
 
-    graph, neo4j_vector, llm = initialize_resources(model_name)
-    
-    pdf_path = "data/Ticket Holders Handbook 2024.pdf"
-    if os.path.exists(pdf_path):
-        split_documents = load_and_split_pdf(pdf_path)
-        num_chunks = ingest_pdf(neo4j_vector, split_documents)
-        st.sidebar.write(f"PDF ingested: {num_chunks} chunks")
-    else:
-        st.sidebar.error("PDF file not found. Please check the file path.")
+    try:
+        graph, neo4j_vector, llm = initialize_resources(model_name)
+        
+        if 'database_checked' not in st.session_state:
+            check_database_content(graph)
+            create_vector_index(graph)
+            st.session_state.database_checked = True
 
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
 
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
 
-    if prompt := st.chat_input("What would you like to know about Wimbledon 2024?"):
-        st.chat_message("user").markdown(prompt)
-        st.session_state.messages.append({"role": "user", "content": prompt})
+        if prompt := st.chat_input("What would you like to know about Wimbledon 2024?"):
+            st.chat_message("user").markdown(prompt)
+            st.session_state.messages.append({"role": "user", "content": prompt})
 
-        response = generate_response(prompt, neo4j_vector, llm)
+            response = generate_response(prompt, neo4j_vector, llm)
 
-        st.chat_message("assistant").markdown(response)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+            st.chat_message("assistant").markdown(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
+
+    except Exception as e:
+        st.error(f"An unexpected error occurred: {str(e)}")
+        st.error("Please try refreshing the page or contact support if the issue persists.")
 
 # Main app logic
 def main():
