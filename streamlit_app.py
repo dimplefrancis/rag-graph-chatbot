@@ -1,15 +1,11 @@
 import streamlit as st
 import os
-from dotenv import load_dotenv
 from langchain_community.graphs import Neo4jGraph
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores.neo4j_vector import Neo4jVector
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from PIL import Image
-
-# Load environment variables
-load_dotenv()
 
 # Set page config
 st.set_page_config(
