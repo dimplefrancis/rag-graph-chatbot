@@ -75,20 +75,16 @@ def initialize_resources(model):
 
     embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
     
-    # Update these based on the output from check_database_content()
-    node_label = "Chunk"  # Replace with the actual label you see in the output
-    text_property = "text"  # Replace with the actual property name for the text content
-    embedding_property = "embedding"  # Replace with the actual property name for the embedding
-
     neo4j_vector = Neo4jVector(
-        embedding=embeddings,
-        url=os.getenv("NEO4J_URI"),
-        username=os.getenv("NEO4J_USERNAME"),
-        password=os.getenv("NEO4J_PASSWORD"),
-        node_label=node_label,
-        text_node_property=text_property,
-        embedding_node_property=embedding_property
-    )
+    embedding=embeddings,
+    url=os.getenv("NEO4J_URI"),
+    username=os.getenv("NEO4J_USERNAME"),
+    password=os.getenv("NEO4J_PASSWORD"),
+    node_label="Chunk",
+    text_node_property="text",
+    embedding_node_property="embedding",
+    index_name="chunk_embedding_index"  
+)
 
     llm = ChatOpenAI(temperature=0, model_name=model, openai_api_key=os.getenv("OPENAI_API_KEY"))
     
@@ -119,6 +115,12 @@ def check_database_content(graph):
     st.write("Node types in the database:")
     for row in result:
         st.write(f"Label: {row['labels']}, Count: {row['count']}")
+    version_result = graph.query("CALL dbms.components() YIELD name, versions, edition UNWIND versions as version RETURN name, version, edition;")
+    st.write(f"Neo4j Version: {version_result[0]['version']}, Edition: {version_result[0]['edition']}")
+    index_result = graph.query("SHOW INDEXES")
+    st.write("Existing Indexes:")
+    for row in index_result:
+        st.write(f"Name: {row['name']}, Type: {row['type']}, Properties: {row['properties']}")
 
     # Check for properties on nodes
     result = graph.query("MATCH (n) UNWIND keys(n) AS key RETURN DISTINCT key, count(*) as count")
@@ -126,11 +128,22 @@ def check_database_content(graph):
     for row in result:
         st.write(f"Property: {row['key']}, Count: {row['count']}")
 
-    # Check for nodes with 'embedding' property (assuming this is the vector)
-    result = graph.query("MATCH (n) WHERE exists(n.embedding) RETURN labels(n) as labels, count(*) as count")
+    # Check for nodes with 'embedding' property (using the correct syntax)
+    result = graph.query("MATCH (n) WHERE n.embedding IS NOT NULL RETURN labels(n) as labels, count(*) as count")
     st.write("Nodes with 'embedding' property:")
     for row in result:
         st.write(f"Label: {row['labels']}, Count: {row['count']}")
+
+def create_vector_index(graph):
+    try:
+        graph.query("""
+        CREATE VECTOR INDEX chunk_embedding_index IF NOT EXISTS
+        FOR (c:Chunk) ON (c.embedding)
+        OPTIONS {indexProvider: 'vector-1.0', indexConfig: {`vector.dimensions`: 1536, `vector.similarity_function`: 'cosine'}}
+        """)
+        st.write("Vector index created successfully.")
+    except Exception as e:
+        st.error(f"Error creating vector index: {str(e)}")
 
 def generate_response(prompt, neo4j_vector, llm):
     if is_greeting(prompt):
@@ -203,7 +216,16 @@ def show_landing_page():
 
 # Chatbot Page
 def show_chat_page():
-    st.markdown(
+    st.header("Chat with Wimbledon Bot")
+    try:
+        graph, neo4j_vector, llm = initialize_resources(model_name)
+        if graph is None or neo4j_vector is None or llm is None:
+            st.error("Failed to initialize resources. Please check the logs and try again.")
+            return
+
+        check_database_content(graph)
+        create_vector_index(graph)
+        st.markdown(
         """
         <style>
         .stApp {
@@ -213,54 +235,59 @@ def show_chat_page():
         </style>
         """,
         unsafe_allow_html=True
-    )
+        )
     
-    col1, col2, col3 = st.columns([1, 3, 1])
-    with col1:
-        st.image(get_image_path("wimbledon_logo.jpg"), width=150)
-    with col2:
-        st.title("WIMBLECHAT")
-    with col3:
-        if st.button("Home", key="home-button"):
-            st.session_state.page = 'landing'
-            st.rerun()
+        col1, col2, col3 = st.columns([1, 3, 1])
+        with col1:
+            st.image(get_image_path("wimbledon_logo.jpg"), width=150)
+        with col2:
+            st.title("WIMBLECHAT")
+        with col3:
+            if st.button("Home", key="home-button"):
+                st.session_state.page = 'landing'
+                st.rerun()
 
-    model_name = st.sidebar.selectbox(
-        "Choose a model",
-        ("gpt-3.5-turbo", "gpt-4-turbo-preview")
-    )
-    st.sidebar.write(f"Currently using: {model_name}")
+        model_name = st.sidebar.selectbox(
+            "Choose a model",
+            ("gpt-3.5-turbo", "gpt-4-turbo-preview")
+        )
+        st.sidebar.write(f"Currently using: {model_name}")
 
-    st.sidebar.info(
-        "This chatbot provides information based solely on the Wimbledon 2024 Ticket Holders Handbook. "
-        "For the most up-to-date and comprehensive information, please visit the official Wimbledon website."
-    )
+        st.sidebar.info(
+            "This chatbot provides information based solely on the Wimbledon 2024 Ticket Holders Handbook. "
+            "For the most up-to-date and comprehensive information, please visit the official Wimbledon website."
+        )
 
-    graph, neo4j_vector, llm = initialize_resources(model_name)
-    check_database_content(graph)
-    pdf_path = "data/Ticket Holders Handbook 2024.pdf"
-    if os.path.exists(pdf_path):
-        split_documents = load_and_split_pdf(pdf_path)
-        num_chunks = ingest_pdf(neo4j_vector, split_documents)
-        st.sidebar.write(f"PDF ingested: {num_chunks} chunks")
-    else:
-        st.sidebar.error("PDF file not found. Please check the file path.")
+        graph, neo4j_vector, llm = initialize_resources(model_name)
+        check_database_content(graph)
+        pdf_path = "data/Ticket Holders Handbook 2024.pdf"
+        if os.path.exists(pdf_path):
+            split_documents = load_and_split_pdf(pdf_path)
+            num_chunks = ingest_pdf(neo4j_vector, split_documents)
+            st.sidebar.write(f"PDF ingested: {num_chunks} chunks")
+        else:
+            st.sidebar.error("PDF file not found. Please check the file path.")
 
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
 
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
 
-    if prompt := st.chat_input("What would you like to know about Wimbledon 2024?"):
-        st.chat_message("user").markdown(prompt)
-        st.session_state.messages.append({"role": "user", "content": prompt})
+        if prompt := st.chat_input("What would you like to know about Wimbledon 2024?"):
+            st.chat_message("user").markdown(prompt)
+            st.session_state.messages.append({"role": "user", "content": prompt})
 
-        response = generate_response(prompt, neo4j_vector, llm)
+            response = generate_response(prompt, neo4j_vector, llm)
 
-        st.chat_message("assistant").markdown(response)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+            st.chat_message("assistant").markdown(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
+
+    except Exception as e:
+        st.error(f"An unexpected error occurred: {str(e)}")
+        st.error("Please try refreshing the page or contact support if the issue persists.")
+
 
 # Main app logic
 def main():
