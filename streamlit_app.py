@@ -88,13 +88,13 @@ def initialize_resources(model):
 # 7. PDF Ingestion Function
 # Function to ingest PDF and add its content to the vector store
 @st.cache_resource
-def ingest_pdf(file_path, neo4j_vector):
+def ingest_pdf(file_path, _neo4j_vector):
     try:
         loader = PyMuPDFLoader(file_path)
         documents = loader.load()
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=20)
         split_documents = text_splitter.split_documents(documents)
-        neo4j_vector.add_documents(split_documents)
+        _neo4j_vector.add_documents(split_documents)
         return len(split_documents)
     except Exception as e:
         st.error(f"Error ingesting PDF: {str(e)}")
