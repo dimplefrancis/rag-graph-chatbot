@@ -108,9 +108,17 @@ def create_vector_index(graph):
     except Exception as e:
         st.error(f"Error creating vector index: {str(e)}")
 
+# Function to check if input is a greeting
+def is_greeting(text):
+    greetings = ['hi', 'hello', 'hey', 'greetings', 'good morning', 'good afternoon', 'good evening']
+    return any(greeting in text.lower() for greeting in greetings)
+
 # Function to generate response
 def generate_response(prompt, neo4j_vector, llm):
     try:
+        if is_greeting(prompt):
+            return "Hello! Welcome to the Wimbledon 2024 chatbot. How can I assist you with information about the tournament based on the Ticket Holders Handbook?"
+        
         #st.write("Starting similarity search...")
         docs = neo4j_vector.similarity_search(prompt, k=3)
         #st.write(f"Similarity search completed. Found {len(docs)} documents.")
