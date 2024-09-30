@@ -104,7 +104,7 @@ def create_vector_index(graph):
         FOR (c:Chunk) ON (c.embedding)
         OPTIONS {indexProvider: 'vector-1.0', indexConfig: {`vector.dimensions`: 1536, `vector.similarity_function`: 'cosine'}}
         """)
-        st.write("Vector index created successfully.")
+        #st.write("Vector index created successfully.")
     except Exception as e:
         st.error(f"Error creating vector index: {str(e)}")
 
