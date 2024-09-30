@@ -1,3 +1,5 @@
+# 1. Imports
+# We need to import all necessary libraries for our application
 import streamlit as st
 import os
 from langchain.graphs import Neo4jGraph
@@ -7,18 +9,23 @@ from langchain_community.document_loaders import PyMuPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from PIL import Image
 
-# Set page config
+# 2. Page Configuration
+# Set up the Streamlit page with a title, icon, and layout
 st.set_page_config(
     page_title="Wimbledon 2024 Chatbot",
     page_icon="🎾",
     layout="wide"
 )
 
+# 3. Utility Functions
+# These functions help with various tasks throughout the application
+
 # Function to get local image path
 def get_image_path(image_name):
     return os.path.join("Images", image_name)
 
-# Custom CSS
+# 4. Custom CSS
+# Add custom styling to make the app more visually appealing
 st.markdown("""
     <style>
     .main {
@@ -53,10 +60,12 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Initialize session state for navigation
+# 5. Session State Initialization
+# Initialize the session state for navigation
 if 'page' not in st.session_state:
     st.session_state.page = 'landing'
 
+# 6. Resource Initialization
 # Initialize Neo4j Graph and vector store
 @st.cache_resource
 def initialize_resources(model):
@@ -76,27 +85,35 @@ def initialize_resources(model):
     llm = ChatOpenAI(temperature=0, model_name=model, openai_api_key=os.getenv("OPENAI_API_KEY"))
     return graph, neo4j_vector, llm
 
-# Function to check database content
+# 7. PDF Ingestion Function
+# Function to ingest PDF and add its content to the vector store
+@st.cache_resource
+def ingest_pdf(file_path, neo4j_vector):
+    try:
+        loader = PyMuPDFLoader(file_path)
+        documents = loader.load()
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=20)
+        split_documents = text_splitter.split_documents(documents)
+        neo4j_vector.add_documents(split_documents)
+        return len(split_documents)
+    except Exception as e:
+        st.error(f"Error ingesting PDF: {str(e)}")
+        return 0
+
+# 8. Database Content Check
+# Function to check and display database content
 def check_database_content(graph):
     try:
         result = graph.query("MATCH (n) RETURN DISTINCT labels(n) as labels, count(*) as count")
-        #st.write("Node types in the database:")
-        #for row in result:
-         #   st.write(f"Label: {row['labels']}, Count: {row['count']}")
-
-        #result = graph.query("MATCH (n) UNWIND keys(n) AS key RETURN DISTINCT key, count(*) as count")
-        #st.write("Properties on nodes:")
-        #for row in result:
-        #    st.write(f"Property: {row['key']}, Count: {row['count']}")
-
-        #result = graph.query("MATCH (n) WHERE n.embedding IS NOT NULL RETURN labels(n) as labels, count(*) as count")
-        #st.write("Nodes with 'embedding' property:")
-        #for row in result:
-        #    st.write(f"Label: {row['labels']}, Count: {row['count']}")
+        # Uncomment the following lines if you want to display database content
+        # st.write("Node types in the database:")
+        # for row in result:
+        #     st.write(f"Label: {row['labels']}, Count: {row['count']}")
     except Exception as e:
         st.error(f"Error checking database content: {str(e)}")
 
-# Function to create vector index
+# 9. Vector Index Creation
+# Function to create a vector index in the database
 def create_vector_index(graph):
     try:
         graph.query("""
@@ -104,30 +121,29 @@ def create_vector_index(graph):
         FOR (c:Chunk) ON (c.embedding)
         OPTIONS {indexProvider: 'vector-1.0', indexConfig: {`vector.dimensions`: 1536, `vector.similarity_function`: 'cosine'}}
         """)
-        #st.write("Vector index created successfully.")
+        # st.write("Vector index created successfully.")
     except Exception as e:
         st.error(f"Error creating vector index: {str(e)}")
 
+# 10. Greeting Check
 # Function to check if input is a greeting
 def is_greeting(text):
     greetings = ['hi', 'hello', 'hey', 'greetings', 'good morning', 'good afternoon', 'good evening']
     return any(greeting in text.lower() for greeting in greetings)
 
-# Function to generate response
+# 11. Response Generation
+# Function to generate response based on user input
 def generate_response(prompt, neo4j_vector, llm):
     try:
         if is_greeting(prompt):
             return "Hello! Welcome to the Wimbledon 2024 chatbot. How can I assist you with information about the tournament based on the Ticket Holders Handbook?"
         
-        #st.write("Starting similarity search...")
         docs = neo4j_vector.similarity_search(prompt, k=3)
-        #st.write(f"Similarity search completed. Found {len(docs)} documents.")
         
         if not docs:
             return "I couldn't find any specific information about that in the Ticket Holders Handbook. Is there something else about Wimbledon 2024 you'd like to know?"
 
         context = "\n".join([doc.page_content for doc in docs])
-        #st.write("Generating response based on retrieved documents...")
         response_prompt = f"""Based solely on the following context from the Wimbledon 2024 Ticket Holders Handbook, answer the question. If the answer is not in the context, politely say that you don't have that specific information in the handbook and ask if there's anything else you can help with regarding Wimbledon 2024.
 
         Context: {context}
@@ -143,7 +159,8 @@ def generate_response(prompt, neo4j_vector, llm):
         st.error(f"An error occurred during response generation: {str(e)}")
         return "I'm sorry, but I encountered an error while processing your request. Could you please rephrase your question or ask about something else related to Wimbledon 2024?"
 
-# Landing Page
+# 12. Landing Page
+# Function to display the landing page
 def show_landing_page():
     st.markdown(
         f"""
@@ -184,7 +201,8 @@ def show_landing_page():
     with col3:
         st.image(get_image_path("centre_court.jpg"), use_column_width=True)
 
-# Chatbot Page
+# 13. Chat Page
+# Function to display the chat interface
 def show_chat_page():
     st.markdown(
         """
@@ -224,6 +242,15 @@ def show_chat_page():
         if 'database_checked' not in st.session_state:
             check_database_content(graph)
             create_vector_index(graph)
+            
+            # Ingest PDF
+            pdf_path = "data/Ticket Holders Handbook 2024.pdf"  # Update this to the correct path
+            if os.path.exists(pdf_path):
+                num_chunks = ingest_pdf(pdf_path, neo4j_vector)
+                st.sidebar.write(f"PDF ingested: {num_chunks} chunks")
+            else:
+                st.sidebar.error("PDF file not found. Please check the file path.")
+            
             st.session_state.database_checked = True
 
         if "messages" not in st.session_state:
@@ -246,7 +273,8 @@ def show_chat_page():
         st.error(f"An unexpected error occurred: {str(e)}")
         st.error("Please try refreshing the page or contact support if the issue persists.")
 
-# Main app logic
+# 14. Main Application Logic
+# Main function to control the flow of the application
 def main():
     if st.session_state.page == 'landing':
         show_landing_page()
