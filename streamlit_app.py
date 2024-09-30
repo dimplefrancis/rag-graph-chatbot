@@ -80,19 +80,19 @@ def initialize_resources(model):
 def check_database_content(graph):
     try:
         result = graph.query("MATCH (n) RETURN DISTINCT labels(n) as labels, count(*) as count")
-        st.write("Node types in the database:")
-        for row in result:
-            st.write(f"Label: {row['labels']}, Count: {row['count']}")
+        #st.write("Node types in the database:")
+        #for row in result:
+         #   st.write(f"Label: {row['labels']}, Count: {row['count']}")
 
-        result = graph.query("MATCH (n) UNWIND keys(n) AS key RETURN DISTINCT key, count(*) as count")
-        st.write("Properties on nodes:")
-        for row in result:
-            st.write(f"Property: {row['key']}, Count: {row['count']}")
+        #result = graph.query("MATCH (n) UNWIND keys(n) AS key RETURN DISTINCT key, count(*) as count")
+        #st.write("Properties on nodes:")
+        #for row in result:
+        #    st.write(f"Property: {row['key']}, Count: {row['count']}")
 
-        result = graph.query("MATCH (n) WHERE n.embedding IS NOT NULL RETURN labels(n) as labels, count(*) as count")
-        st.write("Nodes with 'embedding' property:")
-        for row in result:
-            st.write(f"Label: {row['labels']}, Count: {row['count']}")
+        #result = graph.query("MATCH (n) WHERE n.embedding IS NOT NULL RETURN labels(n) as labels, count(*) as count")
+        #st.write("Nodes with 'embedding' property:")
+        #for row in result:
+        #    st.write(f"Label: {row['labels']}, Count: {row['count']}")
     except Exception as e:
         st.error(f"Error checking database content: {str(e)}")
 
@@ -111,15 +111,15 @@ def create_vector_index(graph):
 # Function to generate response
 def generate_response(prompt, neo4j_vector, llm):
     try:
-        st.write("Starting similarity search...")
+        #st.write("Starting similarity search...")
         docs = neo4j_vector.similarity_search(prompt, k=3)
-        st.write(f"Similarity search completed. Found {len(docs)} documents.")
+        #st.write(f"Similarity search completed. Found {len(docs)} documents.")
         
         if not docs:
             return "I couldn't find any specific information about that in the Ticket Holders Handbook. Is there something else about Wimbledon 2024 you'd like to know?"
 
         context = "\n".join([doc.page_content for doc in docs])
-        st.write("Generating response based on retrieved documents...")
+        #st.write("Generating response based on retrieved documents...")
         response_prompt = f"""Based solely on the following context from the Wimbledon 2024 Ticket Holders Handbook, answer the question. If the answer is not in the context, politely say that you don't have that specific information in the handbook and ask if there's anything else you can help with regarding Wimbledon 2024.
 
         Context: {context}
